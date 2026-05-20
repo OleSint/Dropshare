@@ -1,0 +1,182 @@
+from __future__ import annotations
+import socket
+from typing import Optional, Tuple
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QFormLayout,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QRadioButton,
+    QSpinBox,
+    QVBoxLayout,
+)
+
+from ..models import SharedFile
+
+
+def _local_ip() -> str:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+
+
+class ShareDialog(QDialog):
+    def __init__(
+        self,
+        sf: SharedFile,
+        port: Optional[int],
+        public_ip: Optional[str],
+        upnp_ok: bool,
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self._sf = sf
+        self._port = port
+        self._public_ip = public_ip
+        self._upnp_ok = upnp_ok
+        self._started = False
+        self._max_dl_result = 0
+        self._share_type_result = "lan"
+        self._link = ""
+        self._build()
+
+    def _build(self) -> None:
+        self.setWindowTitle(f"Freigeben: {self._sf.path.name}")
+        self.setModal(True)
+        self.setMinimumWidth(460)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        name_lbl = QLabel(f"<b>{self._sf.path.name}</b>")
+        name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(name_lbl)
+
+        type_group = QGroupBox("Freigabe-Art")
+        type_layout = QVBoxLayout(type_group)
+        self._rb_lan = QRadioButton("Für andere Nutzer derselben Software  (LAN + App-Link)")
+        self._rb_http = QRadioButton("Per Download-Link für alle  (HTTP, für jeden Browser)")
+        self._rb_lan.setChecked(True)
+        type_layout.addWidget(self._rb_lan)
+        type_layout.addWidget(self._rb_http)
+        layout.addWidget(type_group)
+
+        if not self._upnp_ok:
+            warn = QLabel(
+                "⚠  UPnP konnte keinen Port freischalten. "
+                "Für Internet-Freigaben ist manuelle Portweiterleitung nötig — "
+                "der Port wird nach dem Start angezeigt."
+            )
+            warn.setWordWrap(True)
+            warn.setStyleSheet("color: #E67E22; font-size: 9pt; padding: 4px;")
+            layout.addWidget(warn)
+
+        form = QFormLayout()
+        self._spin = QSpinBox()
+        self._spin.setMinimum(0)
+        self._spin.setMaximum(9999)
+        self._spin.setValue(0)
+        self._spin.setSpecialValueText("Unbegrenzt (∞)")
+        self._spin.setFixedWidth(150)
+        form.addRow("Max. Downloads:", self._spin)
+        layout.addLayout(form)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        self._cancel_btn = QPushButton("Abbrechen")
+        self._cancel_btn.clicked.connect(self.reject)
+        self._start_btn = QPushButton("Freigabe starten")
+        self._start_btn.setDefault(True)
+        self._start_btn.clicked.connect(self._on_start)
+        self._start_btn.setStyleSheet(
+            "QPushButton { background: #27AE60; color: white; border-radius: 4px; padding: 6px 16px; }"
+            "QPushButton:hover { background: #2ECC71; }"
+            "QPushButton:pressed { background: #219A52; }"
+        )
+        btn_row.addWidget(self._cancel_btn)
+        btn_row.addWidget(self._start_btn)
+        layout.addLayout(btn_row)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setVisible(False)
+        self._sep = sep
+        layout.addWidget(sep)
+
+        self._link_frame = QFrame()
+        link_layout = QHBoxLayout(self._link_frame)
+        link_layout.setContentsMargins(0, 0, 0, 0)
+        self._link_edit = QLineEdit()
+        self._link_edit.setReadOnly(True)
+        self._link_edit.setStyleSheet("font-family: monospace; font-size: 9pt;")
+        self._copy_btn = QPushButton("Kopieren")
+        self._copy_btn.setFixedWidth(80)
+        self._copy_btn.clicked.connect(self._copy_link)
+        link_layout.addWidget(self._link_edit)
+        link_layout.addWidget(self._copy_btn)
+        self._link_frame.setVisible(False)
+        layout.addWidget(self._link_frame)
+
+    def _on_start(self) -> None:
+        self._started = True
+        self._max_dl_result = self._spin.value()
+        self._share_type_result = "lan" if self._rb_lan.isChecked() else "http"
+
+        if self._share_type_result == "lan":
+            local_ip = _local_ip()
+            self._link = (
+                f"dropshare://{local_ip}:{self._port}"
+                f"/{self._sf.token}/{self._sf.path.name}"
+            )
+        else:
+            if self._public_ip:
+                self._link = (
+                    f"http://{self._public_ip}:{self._port}"
+                    f"/{self._sf.token}/{self._sf.path.name}"
+                )
+            else:
+                local_ip = _local_ip()
+                self._link = (
+                    f"http://<Öffentliche-IP>:{self._port}"
+                    f"/{self._sf.token}/{self._sf.path.name}"
+                    f"  —  Portweiterleitung: {self._port} → {local_ip}"
+                )
+
+        self._link_edit.setText(self._link)
+        self._sep.setVisible(True)
+        self._link_frame.setVisible(True)
+        self._rb_lan.setEnabled(False)
+        self._rb_http.setEnabled(False)
+        self._spin.setEnabled(False)
+        self._cancel_btn.setVisible(False)
+        self._start_btn.setText("Schließen")
+        self._start_btn.setStyleSheet(
+            "QPushButton { background: #3498DB; color: white; border-radius: 4px; padding: 6px 16px; }"
+            "QPushButton:hover { background: #5DADE2; }"
+        )
+        self._start_btn.clicked.disconnect(self._on_start)
+        self._start_btn.clicked.connect(self.accept)
+        self.adjustSize()
+
+    def _copy_link(self) -> None:
+        QApplication.clipboard().setText(self._link_edit.text())
+        self._copy_btn.setText("✓")
+        self._copy_btn.setEnabled(False)
+
+    def result_settings(self) -> Tuple[int, str]:
+        return self._max_dl_result, self._share_type_result
+
+    def was_started(self) -> bool:
+        return self._started

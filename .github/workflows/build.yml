@@ -1,0 +1,74 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - "v*"          # nur bei Tags wie v1.0.0
+  workflow_dispatch:  # oder manuell per Knopfdruck auf GitHub
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            artifact: DropShare.app
+            zip_name: DropShare-macOS.zip
+          - os: windows-latest
+            artifact: dist/DropShare.exe
+            zip_name: DropShare-Windows.zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Abhängigkeiten installieren
+        run: pip install PyQt6 aiohttp miniupnpc zeroconf pyinstaller
+
+      - name: Bauen
+        run: pyinstaller dropshare.spec --noconfirm --clean
+
+      # macOS: .app zu ZIP packen
+      - name: macOS .app zippen
+        if: runner.os == 'macOS'
+        run: |
+          cd dist
+          zip -r ../DropShare-macOS.zip DropShare.app
+
+      # Windows: .exe zu ZIP packen
+      - name: Windows .exe zippen
+        if: runner.os == 'Windows'
+        run: |
+          Compress-Archive -Path dist\DropShare.exe -DestinationPath DropShare-Windows.zip
+        shell: pwsh
+
+      - name: Artifact hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.zip_name }}
+          path: ${{ matrix.zip_name }}
+          retention-days: 30
+
+  # Release erstellen wenn ein Tag gepusht wurde
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Artifacts herunterladen
+        uses: actions/download-artifact@v4
+
+      - name: GitHub Release erstellen
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            DropShare-macOS.zip/DropShare-macOS.zip
+            DropShare-Windows.zip/DropShare-Windows.zip

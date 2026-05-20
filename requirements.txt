@@ -1,0 +1,4 @@
+PyQt6>=6.6.0
+aiohttp>=3.9.0
+miniupnpc>=2.3
+zeroconf>=0.132.0
