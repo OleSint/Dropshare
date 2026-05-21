@@ -33,10 +33,37 @@ jobs:
       - name: Bauen
         run: pyinstaller dropshare.spec --noconfirm --clean
 
-      # macOS: signieren + zu ZIP packen
+      # macOS: Qt-Patch + signieren + zu ZIP packen
+      - name: macOS Qt-Patch für macOS 26
+        if: runner.os == 'macOS'
+        run: python3 hook_macos_appkit.py || true
+        # Eigentlicher Patch (hook_macos_appkit.py ist der runtime hook, Patch hier separat):
+      - name: macOS QtCore.abi3.so patchen
+        if: runner.os == 'macOS'
+        run: |
+          python3 - <<'PYEOF'
+          import subprocess, sys
+          path = "dist/DropShare.app/Contents/Frameworks/PyQt6/QtCore.abi3.so"
+          result = subprocess.run(["nm", path], capture_output=True, text=True)
+          offset = None
+          for line in result.stdout.split("\n"):
+              if "__GLOBAL__sub_I_qdarwinpermissionplugin_location.mm" in line and " t " in line:
+                  offset = int(line.split()[0], 16)
+                  break
+          if offset is None:
+              print("Symbol nicht gefunden, übersprungen"); sys.exit(0)
+          with open(path, "r+b") as f:
+              f.seek(offset)
+              f.write(bytes([0xC0, 0x03, 0x5F, 0xD6]))
+          print(f"Patch angewendet bei 0x{offset:x}")
+          PYEOF
+
       - name: macOS .app signieren
         if: runner.os == 'macOS'
-        run: codesign --force --deep --sign - dist/DropShare.app
+        run: |
+          find dist/DropShare.app -name "*.so" -o -name "*.dylib" | \
+            xargs -I{} codesign --force --sign - {} 2>/dev/null || true
+          codesign --force --deep --sign - dist/DropShare.app
 
       - name: macOS .app zippen
         if: runner.os == 'macOS'
