@@ -3,6 +3,8 @@ import platform
 import re
 import subprocess
 import sys
+import tarfile
+import tempfile
 import threading
 import urllib.request
 from pathlib import Path
@@ -23,24 +25,17 @@ def _binary_path() -> Path:
     return _config_dir() / name
 
 
-def _binary_url() -> str:
+def _download_info() -> tuple[str, bool]:
+    """Returns (url, is_tgz)."""
     machine = platform.machine().lower()
+    base = "https://github.com/cloudflare/cloudflared/releases/latest/download"
     if sys.platform == "darwin":
         arch = "arm64" if machine in ("arm64", "aarch64") else "amd64"
-        return (
-            f"https://github.com/cloudflare/cloudflared/releases/latest"
-            f"/download/cloudflared-darwin-{arch}"
-        )
+        return f"{base}/cloudflared-darwin-{arch}.tgz", True
     if sys.platform == "win32":
-        return (
-            "https://github.com/cloudflare/cloudflared/releases/latest"
-            "/download/cloudflared-windows-amd64.exe"
-        )
+        return f"{base}/cloudflared-windows-amd64.exe", False
     arch = "arm64" if machine in ("arm64", "aarch64") else "amd64"
-    return (
-        f"https://github.com/cloudflare/cloudflared/releases/latest"
-        f"/download/cloudflared-linux-{arch}"
-    )
+    return f"{base}/cloudflared-linux-{arch}", False
 
 
 def _ensure_binary(on_status: Callable[[str], None]) -> Optional[Path]:
@@ -49,7 +44,22 @@ def _ensure_binary(on_status: Callable[[str], None]) -> Optional[Path]:
         return path
     on_status("cloudflared wird heruntergeladen (einmalig ~30 MB) …")
     try:
-        urllib.request.urlretrieve(_binary_url(), path)
+        url, is_tgz = _download_info()
+        if is_tgz:
+            with tempfile.NamedTemporaryFile(suffix=".tgz", delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+            urllib.request.urlretrieve(url, tmp_path)
+            with tarfile.open(tmp_path, "r:gz") as tar:
+                # The archive contains a single binary named "cloudflared"
+                member = next(
+                    m for m in tar.getmembers()
+                    if m.isfile() and "cloudflared" in m.name
+                )
+                extracted = tar.extractfile(member)
+                path.write_bytes(extracted.read())
+            tmp_path.unlink(missing_ok=True)
+        else:
+            urllib.request.urlretrieve(url, path)
         if sys.platform != "win32":
             path.chmod(0o755)
         return path
