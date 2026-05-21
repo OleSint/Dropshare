@@ -1,6 +1,8 @@
 __pycache__/
 *.pyc
 *.pyo
+app/__pycache__/
+app/gui/__pycache__/
 .DS_Store
 build/
 dist/
