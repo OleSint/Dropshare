@@ -6,6 +6,21 @@ IS_WIN = sys.platform == "win32"
 
 block_cipher = None
 
+# Qt-Plugins die auf macOS 26 (Tahoe) durch PAC-Pointer-Fehler crashen
+# und die wir nicht brauchen.
+_EXCLUDE_BINS = [
+    "qdarwinpermissionplugin_location",
+    "qdarwinpermissionplugin_camera",
+    "qdarwinpermissionplugin_microphone",
+    "qdarwinpermissionplugin_contacts",
+    "qdarwinpermissionplugin_calendar",
+    "qdarwinpermissionplugin_bluetooth",
+]
+
+def _filter_bins(binaries):
+    return [b for b in binaries
+            if not any(ex in b[0] for ex in _EXCLUDE_BINS)]
+
 a = Analysis(
     ["main.py"],
     pathex=[],
@@ -76,7 +91,7 @@ else:
 
     coll = COLLECT(
         exe,
-        a.binaries,
+        _filter_bins(a.binaries),
         a.zipfiles,
         a.datas,
         strip=False,
