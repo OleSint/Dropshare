@@ -12,6 +12,7 @@ class SharedFile:
     download_count: int = 0
     share_type: str = ""        # "" | "lan" | "http"
     active: bool = False
+    link: str = ""              # vollständiger HTTP-Link nach Freigabe
 
     @property
     def is_shared(self) -> bool:

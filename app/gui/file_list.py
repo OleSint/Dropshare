@@ -155,6 +155,7 @@ class FileListWidget(QWidget):
     share_requested = pyqtSignal(str)        # path_str
     stop_sharing_requested = pyqtSignal(str)
     remove_requested = pyqtSignal(str)
+    copy_link_requested = pyqtSignal(str)    # path_str
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -232,6 +233,9 @@ class FileListWidget(QWidget):
         if sf.is_shared:
             act_stop = menu.addAction("Freigabe beenden")
             act_stop.triggered.connect(lambda: self.stop_sharing_requested.emit(path_str))
+            if sf.link:
+                act_copy = menu.addAction("Link kopieren")
+                act_copy.triggered.connect(lambda: self.copy_link_requested.emit(path_str))
         else:
             act_share = menu.addAction("Freigeben…")
             act_share.triggered.connect(lambda: self.share_requested.emit(path_str))
