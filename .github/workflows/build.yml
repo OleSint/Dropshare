@@ -33,7 +33,11 @@ jobs:
       - name: Bauen
         run: pyinstaller dropshare.spec --noconfirm --clean
 
-      # macOS: .app zu ZIP packen
+      # macOS: signieren + zu ZIP packen
+      - name: macOS .app signieren
+        if: runner.os == 'macOS'
+        run: codesign --force --deep --sign - dist/DropShare.app
+
       - name: macOS .app zippen
         if: runner.os == 'macOS'
         run: |
