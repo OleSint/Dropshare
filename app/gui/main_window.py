@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 from ..discovery import LanDiscovery
 from ..models import SharedFile
 from ..server import FileServer
+from ..tunnel import CloudflareTunnel
 from ..upnp import setup_upnp_async
 from .file_list import FileListWidget
 from .network_panel import NetworkPanel
@@ -31,11 +32,14 @@ from .share_dialog import ShareDialog
 
 class _Signals(QObject):
     """Thread-safe bridge: server/UPnP/discovery threads → Qt main thread."""
-    share_changed   = pyqtSignal(str)               # token
-    upnp_done       = pyqtSignal(bool, str, int)    # success, ip, port
+    share_changed   = pyqtSignal(str)                  # token
+    upnp_done       = pyqtSignal(bool, str, int)       # success, ip, port
     peer_shares     = pyqtSignal(str, str, int, list)  # name, ip, port, files
-    peer_lost       = pyqtSignal(str)               # name
-    download_done   = pyqtSignal(bool, str)         # success, filename
+    peer_lost       = pyqtSignal(str)                  # name
+    download_done   = pyqtSignal(bool, str)            # success, filename
+    tunnel_status   = pyqtSignal(str)                  # status text
+    tunnel_ready    = pyqtSignal(str)                  # base URL
+    tunnel_error    = pyqtSignal(str)                  # error text
 
 
 class MainWindow(QMainWindow):
@@ -52,6 +56,9 @@ class MainWindow(QMainWindow):
         self._signals.peer_shares.connect(self._on_peer_shares)
         self._signals.peer_lost.connect(self._on_peer_lost)
         self._signals.download_done.connect(self._on_download_done)
+        self._signals.tunnel_status.connect(self._on_tunnel_status)
+        self._signals.tunnel_ready.connect(self._on_tunnel_ready)
+        self._signals.tunnel_error.connect(self._on_tunnel_error)
 
         self._server = FileServer()
         self._server.on_share_changed = (
@@ -59,7 +66,10 @@ class MainWindow(QMainWindow):
         )
         self._server.start()
 
+        self._tunnel: Optional[CloudflareTunnel] = None
+        self._tunnel_url: Optional[str] = None
         self._discovery: Optional[LanDiscovery] = None
+        self._start_tunnel()
         self._start_discovery()
         self._start_upnp()
         self._build_ui()
@@ -132,12 +142,21 @@ class MainWindow(QMainWindow):
         sb.setStyleSheet("QStatusBar { font-size: 8pt; color: #7F8C8D; }")
         self.setStatusBar(sb)
         self._lbl_port = QLabel(f"Server: Port {self._server.port}")
-        self._lbl_upnp = QLabel("UPnP: wird geprüft …")
+        self._lbl_tunnel = QLabel("Tunnel: wird gestartet …")
         sb.addWidget(self._lbl_port)
         sb.addWidget(_sep())
-        sb.addWidget(self._lbl_upnp)
+        sb.addWidget(self._lbl_tunnel)
 
     # ── Networking ────────────────────────────────────────────────────────
+
+    def _start_tunnel(self) -> None:
+        if self._server.port is None:
+            return
+        self._tunnel = CloudflareTunnel(self._server.port)
+        self._tunnel.on_status = lambda msg: self._signals.tunnel_status.emit(msg)
+        self._tunnel.on_ready  = lambda url: self._signals.tunnel_ready.emit(url)
+        self._tunnel.on_error  = lambda err: self._signals.tunnel_error.emit(err)
+        self._tunnel.start()
 
     def _start_upnp(self) -> None:
         if self._server.port is None:
@@ -185,7 +204,10 @@ class MainWindow(QMainWindow):
         sf = self._files.get(path_str)
         if not sf:
             return
-        dlg = ShareDialog(sf, self._server.port, self._public_ip, self._upnp_ok, self)
+        dlg = ShareDialog(
+            sf, self._server.port, self._public_ip, self._upnp_ok,
+            tunnel_url=self._tunnel_url, parent=self,
+        )
         if dlg.exec() and dlg.was_started():
             max_dl, share_type = dlg.result_settings()
             sf.max_downloads = max_dl
@@ -225,12 +247,18 @@ class MainWindow(QMainWindow):
     def _on_upnp_done(self, success: bool, ip: str, port: int) -> None:
         self._upnp_ok = success
         self._public_ip = ip or None
-        if success:
-            self._lbl_upnp.setText(f"UPnP: ✓  {ip}")
-        elif ip:
-            self._lbl_upnp.setText(f"UPnP: fehlgeschlagen  ({ip})")
-        else:
-            self._lbl_upnp.setText("UPnP: nicht verfügbar")
+
+    def _on_tunnel_status(self, msg: str) -> None:
+        self._lbl_tunnel.setText(f"Tunnel: {msg}")
+
+    def _on_tunnel_ready(self, url: str) -> None:
+        self._tunnel_url = url
+        self._lbl_tunnel.setText(f"Tunnel: ✓  bereit")
+        self._lbl_tunnel.setStyleSheet("color: #27AE60;")
+
+    def _on_tunnel_error(self, err: str) -> None:
+        self._lbl_tunnel.setText(f"Tunnel: ✗  {err}")
+        self._lbl_tunnel.setStyleSheet("color: #E74C3C;")
 
     def _on_peer_shares(self, name: str, ip: str, port: int, files: list) -> None:
         self._net_panel.update_peer(name, ip, port, files)
@@ -281,6 +309,8 @@ class MainWindow(QMainWindow):
     # ── Lifecycle ─────────────────────────────────────────────────────────
 
     def closeEvent(self, event) -> None:
+        if self._tunnel:
+            self._tunnel.stop()
         if self._discovery:
             self._discovery.stop()
         super().closeEvent(event)

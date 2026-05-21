@@ -37,6 +37,7 @@ class ShareDialog(QDialog):
         port: Optional[int],
         public_ip: Optional[str],
         upnp_ok: bool,
+        tunnel_url: Optional[str] = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -44,6 +45,7 @@ class ShareDialog(QDialog):
         self._port = port
         self._public_ip = public_ip
         self._upnp_ok = upnp_ok
+        self._tunnel_url = tunnel_url
         self._started = False
         self._max_dl_result = 0
         self._share_type_result = "lan"
@@ -73,20 +75,32 @@ class ShareDialog(QDialog):
         type_layout.addWidget(self._rb_http)
         layout.addWidget(type_group)
 
-        # UPnP-Warnung — nur sichtbar wenn HTTP gewählt und UPnP nicht aktiv
-        self._warn = QLabel(
-            "⚠  UPnP konnte keinen Port freischalten. "
-            "Für Internet-Freigaben ist manuelle Portweiterleitung nötig — "
-            "der Port wird nach dem Start angezeigt."
-        )
+        # Status-Zeile für Internet-Freigabe (nur wenn HTTP gewählt)
+        internet_ok = bool(self._tunnel_url) or self._upnp_ok
+        if self._tunnel_url:
+            status_text = "✓  Cloudflare-Tunnel aktiv — Link funktioniert sofort weltweit."
+            status_style = "color: #27AE60; font-size: 9pt; padding: 4px;"
+        elif self._upnp_ok:
+            status_text = "✓  UPnP aktiv — Port wurde automatisch freigegeben."
+            status_style = "color: #27AE60; font-size: 9pt; padding: 4px;"
+        else:
+            status_text = (
+                "⚠  Tunnel noch nicht bereit. Bitte einige Sekunden warten "
+                "und den Dialog erneut öffnen."
+            )
+            status_style = "color: #E67E22; font-size: 9pt; padding: 4px;"
+
+        self._warn = QLabel(status_text)
         self._warn.setWordWrap(True)
-        self._warn.setStyleSheet("color: #E67E22; font-size: 9pt; padding: 4px;")
+        self._warn.setStyleSheet(status_style)
         self._warn.setVisible(False)
         layout.addWidget(self._warn)
 
-        self._rb_http.toggled.connect(
-            lambda checked: self._warn.setVisible(checked and not self._upnp_ok)
-        )
+        self._rb_http.toggled.connect(lambda checked: self._warn.setVisible(checked))
+        if not internet_ok:
+            self._rb_http.toggled.connect(
+                lambda checked: self._start_btn.setEnabled(not checked or internet_ok)
+            )
 
         form = QFormLayout()
         self._spin = QSpinBox()
@@ -142,13 +156,15 @@ class ShareDialog(QDialog):
         local_ip = _local_ip()
 
         if self._share_type_result == "lan":
-            # Fix: immer http:// — funktioniert direkt im Browser und in der App
             self._link = (
                 f"http://{local_ip}:{self._port}"
                 f"/{self._sf.token}/{self._sf.path.name}"
             )
         else:
-            if self._public_ip:
+            if self._tunnel_url:
+                base = self._tunnel_url.rstrip("/")
+                self._link = f"{base}/{self._sf.token}/{self._sf.path.name}"
+            elif self._public_ip:
                 self._link = (
                     f"http://{self._public_ip}:{self._port}"
                     f"/{self._sf.token}/{self._sf.path.name}"
