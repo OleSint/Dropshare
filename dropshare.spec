@@ -48,7 +48,7 @@ a = Analysis(
         "asyncio.runners",
     ],
     hookspath=[],
-    runtime_hooks=[],
+    runtime_hooks=["hook_macos_appkit.py"] if IS_MAC else [],
     excludes=[],
     cipher=block_cipher,
     noarchive=False,
@@ -110,5 +110,7 @@ else:
             "CFBundleVersion": "1.0.0",
             "NSRequiresAquaSystemAppearance": False,
             "LSMinimumSystemVersion": "10.14",
+            "NSPrincipalClass": "NSApplication",
+            "CFBundlePackageType": "APPL",
         },
     )
