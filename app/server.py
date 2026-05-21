@@ -90,3 +90,41 @@ class FileServer:
     def remove_share(self, token: str) -> None:
         with self._lock:
             self._shares.pop(token, None)
+
+    def fetch_peer_shares(
+        self, ip: str, port: int, callback: Callable[[list], None]
+    ) -> None:
+        """Fetch the share list of another DropShare instance on the LAN."""
+        async def _fetch() -> None:
+            import aiohttp
+            try:
+                timeout = aiohttp.ClientTimeout(total=3)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(f"http://{ip}:{port}/api/shares") as resp:
+                        data = await resp.json()
+                        callback(data)
+            except Exception:
+                callback([])
+
+        asyncio.run_coroutine_threadsafe(_fetch(), self._loop)
+
+    def download_url(
+        self, url: str, dest: Path, on_done: Callable[[bool], None]
+    ) -> None:
+        """Download a URL to dest path in the background."""
+        async def _dl() -> None:
+            import aiohttp
+            try:
+                timeout = aiohttp.ClientTimeout(total=300)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(url) as resp:
+                        resp.raise_for_status()
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        with open(dest, "wb") as f:
+                            async for chunk in resp.content.iter_chunked(65536):
+                                f.write(chunk)
+                on_done(True)
+            except Exception:
+                on_done(False)
+
+        asyncio.run_coroutine_threadsafe(_dl(), self._loop)

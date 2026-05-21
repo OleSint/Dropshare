@@ -73,15 +73,20 @@ class ShareDialog(QDialog):
         type_layout.addWidget(self._rb_http)
         layout.addWidget(type_group)
 
-        if not self._upnp_ok:
-            warn = QLabel(
-                "⚠  UPnP konnte keinen Port freischalten. "
-                "Für Internet-Freigaben ist manuelle Portweiterleitung nötig — "
-                "der Port wird nach dem Start angezeigt."
-            )
-            warn.setWordWrap(True)
-            warn.setStyleSheet("color: #E67E22; font-size: 9pt; padding: 4px;")
-            layout.addWidget(warn)
+        # UPnP-Warnung — nur sichtbar wenn HTTP gewählt und UPnP nicht aktiv
+        self._warn = QLabel(
+            "⚠  UPnP konnte keinen Port freischalten. "
+            "Für Internet-Freigaben ist manuelle Portweiterleitung nötig — "
+            "der Port wird nach dem Start angezeigt."
+        )
+        self._warn.setWordWrap(True)
+        self._warn.setStyleSheet("color: #E67E22; font-size: 9pt; padding: 4px;")
+        self._warn.setVisible(False)
+        layout.addWidget(self._warn)
+
+        self._rb_http.toggled.connect(
+            lambda checked: self._warn.setVisible(checked and not self._upnp_ok)
+        )
 
         form = QFormLayout()
         self._spin = QSpinBox()
@@ -134,10 +139,12 @@ class ShareDialog(QDialog):
         self._max_dl_result = self._spin.value()
         self._share_type_result = "lan" if self._rb_lan.isChecked() else "http"
 
+        local_ip = _local_ip()
+
         if self._share_type_result == "lan":
-            local_ip = _local_ip()
+            # Fix: immer http:// — funktioniert direkt im Browser und in der App
             self._link = (
-                f"dropshare://{local_ip}:{self._port}"
+                f"http://{local_ip}:{self._port}"
                 f"/{self._sf.token}/{self._sf.path.name}"
             )
         else:
@@ -147,7 +154,6 @@ class ShareDialog(QDialog):
                     f"/{self._sf.token}/{self._sf.path.name}"
                 )
             else:
-                local_ip = _local_ip()
                 self._link = (
                     f"http://<Öffentliche-IP>:{self._port}"
                     f"/{self._sf.token}/{self._sf.path.name}"
@@ -177,6 +183,9 @@ class ShareDialog(QDialog):
 
     def result_settings(self) -> Tuple[int, str]:
         return self._max_dl_result, self._share_type_result
+
+    def result_link(self) -> str:
+        return self._link
 
     def was_started(self) -> bool:
         return self._started
