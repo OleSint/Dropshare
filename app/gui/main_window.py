@@ -96,6 +96,7 @@ class MainWindow(QMainWindow):
         # Header row
         hdr_row = QHBoxLayout()
         title = QLabel("DropShare")
+        title.setStyleSheet("color: #2C3E50;")
         f = title.font()
         f.setPointSize(15)
         f.setBold(True)
@@ -139,7 +140,10 @@ class MainWindow(QMainWindow):
 
         # Status bar
         sb = QStatusBar()
-        sb.setStyleSheet("QStatusBar { font-size: 8pt; color: #7F8C8D; }")
+        sb.setStyleSheet(
+            "QStatusBar { font-size: 8pt; }"
+            "QStatusBar QLabel { color: #7F8C8D; font-size: 8pt; }"
+        )
         self.setStatusBar(sb)
         self._lbl_port = QLabel(f"Server: Port {self._server.port}")
         self._lbl_tunnel = QLabel("Tunnel: wird gestartet …")
@@ -318,5 +322,5 @@ class MainWindow(QMainWindow):
 
 def _sep() -> QLabel:
     lbl = QLabel("|")
-    lbl.setStyleSheet("color: #D5D8DC;")
+    lbl.setStyleSheet("color: #BDC3C7;")
     return lbl

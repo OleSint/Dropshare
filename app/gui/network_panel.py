@@ -110,6 +110,7 @@ class NetworkPanel(QWidget):
         layout.setSpacing(4)
 
         hdr = QLabel("Im Netzwerk")
+        hdr.setStyleSheet("color: #2C3E50;")
         f = hdr.font()
         f.setPointSize(11)
         f.setBold(True)

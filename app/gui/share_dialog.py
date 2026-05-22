@@ -64,12 +64,16 @@ class ShareDialog(QDialog):
 
         name_lbl = QLabel(f"<b>{self._sf.path.name}</b>")
         name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        name_lbl.setStyleSheet("color: #2C3E50;")
         layout.addWidget(name_lbl)
 
         type_group = QGroupBox("Freigabe-Art")
+        type_group.setStyleSheet("QGroupBox { color: #2C3E50; }")
         type_layout = QVBoxLayout(type_group)
         self._rb_lan = QRadioButton("Für andere Nutzer derselben Software  (LAN + App-Link)")
+        self._rb_lan.setStyleSheet("color: #2C3E50;")
         self._rb_http = QRadioButton("Per Download-Link für alle  (HTTP, für jeden Browser)")
+        self._rb_http.setStyleSheet("color: #2C3E50;")
         self._rb_lan.setChecked(True)
         type_layout.addWidget(self._rb_lan)
         type_layout.addWidget(self._rb_http)
