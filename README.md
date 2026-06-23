@@ -8,9 +8,10 @@ Dateien per Drag & Drop freigeben — direkt über das Internet, ohne Cloud-Dien
 
 DropShare ist eine kleine Desktop-App für macOS und Windows. Man zieht Dateien ins Fenster und gibt sie per Rechtsklick frei. Andere können die Datei dann über einen Link herunterladen — ganz ohne Dropbox, WeTransfer oder ähnliche Dienste. Der eigene Rechner ist der Server.
 
-**Zwei Freigabe-Arten:**
+**Drei Freigabe-Arten:**
 - **LAN** — andere DropShare-Nutzer im selben Netzwerk sehen die Datei automatisch (AutoDiscover)
 - **Internet** — ein öffentlicher HTTPS-Link über einen Cloudflare-Tunnel, der in jedem Browser funktioniert
+- **Tailscale** — ein privater, verschlüsselter Link, der nur auf den eigenen Geräten funktioniert, egal wo sie stehen (siehe [TAILSCALE.md](TAILSCALE.md))
 
 **Download-Limit:** Man kann einstellen, wie oft eine Datei heruntergeladen werden darf. Danach wird die Freigabe automatisch beendet.
 
@@ -60,6 +61,10 @@ https://zufaelliger-name.trycloudflare.com/TOKEN/dateiname.pdf
 ```
 
 **Hinweis zur Privatsphäre:** Cloudflare fungiert als Durchleitung und kann technisch den Inhalt übertragener Dateien einsehen. Für vertrauliche Dateien empfiehlt sich daher ausschließlich die LAN-Freigabe.
+
+### Private Freigabe via Tailscale
+
+Eine ausführliche, leicht verständliche Anleitung dazu gibt es in [TAILSCALE.md](TAILSCALE.md).
 
 ### AutoDiscover im LAN
 

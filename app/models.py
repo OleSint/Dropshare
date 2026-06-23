@@ -10,7 +10,7 @@ class SharedFile:
     token: str = field(default_factory=lambda: uuid.uuid4().hex[:16])
     max_downloads: int = 0      # 0 = unlimited
     download_count: int = 0
-    share_type: str = ""        # "" | "lan" | "http"
+    share_type: str = ""        # "" | "lan" | "http" | "tailscale"
     active: bool = False
     link: str = ""              # vollständiger HTTP-Link nach Freigabe
 

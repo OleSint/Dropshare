@@ -38,6 +38,7 @@ class ShareDialog(QDialog):
         public_ip: Optional[str],
         upnp_ok: bool,
         tunnel_url: Optional[str] = None,
+        tailscale_ip: Optional[str] = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -46,6 +47,7 @@ class ShareDialog(QDialog):
         self._public_ip = public_ip
         self._upnp_ok = upnp_ok
         self._tunnel_url = tunnel_url
+        self._tailscale_ip = tailscale_ip
         self._started = False
         self._max_dl_result = 0
         self._share_type_result = "lan"
@@ -77,6 +79,21 @@ class ShareDialog(QDialog):
         self._rb_lan.setChecked(True)
         type_layout.addWidget(self._rb_lan)
         type_layout.addWidget(self._rb_http)
+
+        if self._tailscale_ip:
+            self._rb_tailscale = QRadioButton(
+                "Über Tailscale  (privat & verschlüsselt, nur eigene Geräte)"
+            )
+            self._rb_tailscale.setStyleSheet("color: #2C3E50;")
+            type_layout.addWidget(self._rb_tailscale)
+        else:
+            self._rb_tailscale = QRadioButton(
+                "Über Tailscale  (nicht verbunden — siehe tailscale.com/download)"
+            )
+            self._rb_tailscale.setStyleSheet("color: #95A5A6;")
+            self._rb_tailscale.setEnabled(False)
+            type_layout.addWidget(self._rb_tailscale)
+
         layout.addWidget(type_group)
 
         # Status-Zeile für Internet-Freigabe (nur wenn HTTP gewählt)
@@ -105,6 +122,18 @@ class ShareDialog(QDialog):
             self._rb_http.toggled.connect(
                 lambda checked: self._start_btn.setEnabled(not checked or internet_ok)
             )
+
+        # Status-Zeile für Tailscale-Freigabe
+        self._ts_info = QLabel(
+            f"✓  Verbunden als {self._tailscale_ip} — Link erreichbar für alle "
+            "Geräte in deinem Tailnet." if self._tailscale_ip else ""
+        )
+        self._ts_info.setWordWrap(True)
+        self._ts_info.setStyleSheet("color: #27AE60; font-size: 9pt; padding: 4px;")
+        self._ts_info.setVisible(False)
+        layout.addWidget(self._ts_info)
+        if self._tailscale_ip:
+            self._rb_tailscale.toggled.connect(self._ts_info.setVisible)
 
         form = QFormLayout()
         self._spin = QSpinBox()
@@ -155,13 +184,23 @@ class ShareDialog(QDialog):
     def _on_start(self) -> None:
         self._started = True
         self._max_dl_result = self._spin.value()
-        self._share_type_result = "lan" if self._rb_lan.isChecked() else "http"
+        if self._tailscale_ip and self._rb_tailscale.isChecked():
+            self._share_type_result = "tailscale"
+        elif self._rb_lan.isChecked():
+            self._share_type_result = "lan"
+        else:
+            self._share_type_result = "http"
 
         local_ip = _local_ip()
 
         if self._share_type_result == "lan":
             self._link = (
                 f"http://{local_ip}:{self._port}"
+                f"/{self._sf.token}/{self._sf.path.name}"
+            )
+        elif self._share_type_result == "tailscale":
+            self._link = (
+                f"http://{self._tailscale_ip}:{self._port}"
                 f"/{self._sf.token}/{self._sf.path.name}"
             )
         else:
@@ -185,6 +224,7 @@ class ShareDialog(QDialog):
         self._link_frame.setVisible(True)
         self._rb_lan.setEnabled(False)
         self._rb_http.setEnabled(False)
+        self._rb_tailscale.setEnabled(False)
         self._spin.setEnabled(False)
         self._cancel_btn.setVisible(False)
         self._start_btn.setText("Schließen")

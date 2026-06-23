@@ -1,4 +1,5 @@
 from __future__ import annotations
+import threading
 import uuid
 import webbrowser
 from pathlib import Path
@@ -20,6 +21,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from .. import tailscale
 from ..discovery import LanDiscovery
 from ..models import SharedFile
 from ..server import FileServer
@@ -40,6 +42,7 @@ class _Signals(QObject):
     tunnel_status   = pyqtSignal(str)                  # status text
     tunnel_ready    = pyqtSignal(str)                  # base URL
     tunnel_error    = pyqtSignal(str)                  # error text
+    tailscale_ip    = pyqtSignal(str)                  # Tailscale-IP dieses Geräts
 
 
 class MainWindow(QMainWindow):
@@ -59,6 +62,7 @@ class MainWindow(QMainWindow):
         self._signals.tunnel_status.connect(self._on_tunnel_status)
         self._signals.tunnel_ready.connect(self._on_tunnel_ready)
         self._signals.tunnel_error.connect(self._on_tunnel_error)
+        self._signals.tailscale_ip.connect(self._on_tailscale_ip)
 
         self._server = FileServer()
         self._server.on_share_changed = (
@@ -68,10 +72,12 @@ class MainWindow(QMainWindow):
 
         self._tunnel: Optional[CloudflareTunnel] = None
         self._tunnel_url: Optional[str] = None
+        self._tailscale_ip: Optional[str] = None
         self._discovery: Optional[LanDiscovery] = None
         self._start_tunnel()
         self._start_discovery()
         self._start_upnp()
+        self._start_tailscale_check()
         self._build_ui()
 
         # Periodisch Peer-Listen aktualisieren (alle 30 s)
@@ -170,6 +176,13 @@ class MainWindow(QMainWindow):
             lambda ok, ip, port: self._signals.upnp_done.emit(ok, ip or "", port or 0),
         )
 
+    def _start_tailscale_check(self) -> None:
+        def _check() -> None:
+            ip = tailscale.get_ip()
+            if ip:
+                self._signals.tailscale_ip.emit(ip)
+        threading.Thread(target=_check, daemon=True, name="dropshare-tailscale").start()
+
     def _start_discovery(self) -> None:
         if self._server.port is None:
             return
@@ -210,7 +223,8 @@ class MainWindow(QMainWindow):
             return
         dlg = ShareDialog(
             sf, self._server.port, self._public_ip, self._upnp_ok,
-            tunnel_url=self._tunnel_url, parent=self,
+            tunnel_url=self._tunnel_url, tailscale_ip=self._tailscale_ip,
+            parent=self,
         )
         if dlg.exec() and dlg.was_started():
             max_dl, share_type = dlg.result_settings()
@@ -251,6 +265,9 @@ class MainWindow(QMainWindow):
     def _on_upnp_done(self, success: bool, ip: str, port: int) -> None:
         self._upnp_ok = success
         self._public_ip = ip or None
+
+    def _on_tailscale_ip(self, ip: str) -> None:
+        self._tailscale_ip = ip
 
     def _on_tunnel_status(self, msg: str) -> None:
         self._lbl_tunnel.setText(f"Tunnel: {msg}")

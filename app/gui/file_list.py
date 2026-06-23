@@ -121,6 +121,8 @@ class _FileDelegate(QStyledItemDelegate):
             size_str += "  ·  LAN"
         elif sf.share_type == "http":
             size_str += "  ·  Internet"
+        elif sf.share_type == "tailscale":
+            size_str += "  ·  Tailscale"
         sub_rect = QRect(text_x, r.top() + r.height() // 2 + 4, text_w, 16)
         painter.drawText(
             sub_rect,
