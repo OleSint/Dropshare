@@ -1,8 +1,18 @@
 # DropShare
 
 Dateien per Drag & Drop freigeben — direkt über das Internet, ohne Cloud-Dienste.
-
 ---
+## ☕ Support this project
+
+If this integration saves you time, consider supporting its development:
+
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-%E2%9D%A4-red?logo=github)](https://github.com/sponsors/OleSint)
+
+This project is and will remain free and open source.
+--- 
+<br>
+---
+
 
 ## Was ist DropShare?
 
